@@ -13,7 +13,7 @@ hash_known_hosts=$(ssh -G * | awk '/hashknownhosts/ {print $2}')
 hashed_hostname=$HOST
 
 keyscan_output=$(ssh-keyscan -T $KEYSCAN_TIMEOUT -t $USER_KEY_TYPE $HOST)
-[[ "$hash_known_hosts" == "yes" ]] && hashed_hostname=$(echo "$keyscan_output" | awk '{print $1}')
+[[ "$hash_known_hosts" == "yes" ]] && hashed_hostname=$(echo "$keyscan_output" | grep -v "^#" | awk '{print $1}')
 host_key=$(echo "$keyscan_output" | grep -v "^#" | awk '{print $3}')
 
 # Check if the key is empty
