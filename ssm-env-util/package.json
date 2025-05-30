@@ -1,0 +1,16 @@
+{
+  "name": "ssm-env-util",
+  "version": "1.0.0",
+  "description": "get parameters from ssm by parsing .env.template",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-ssm": "^3.624.0",
+    "dotenv": "^16.4.5"
+  }
+}

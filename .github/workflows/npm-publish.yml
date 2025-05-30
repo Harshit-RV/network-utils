@@ -1,0 +1,100 @@
+name: Release and Publish JWKS-slim
+
+on:
+  push:
+    paths:
+      - "jwks-slim/**"
+
+env:
+  BRANCH_TAG: "${{ github.ref_name == 'main' && 'latest' || github.ref_name }}"
+  BRANCH: ${{ github.ref_name }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "jwks-slim"
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests
+        run: npm run test
+        
+  publish_and_release:
+    needs: test
+    name: Publish JWKS-slim package
+    environment: "${{ github.ref_name == 'main' && 'Prod' || 'Dev' }}"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "jwks-slim"
+    steps:
+      - name: Generate token
+        if: ${{ github.ref_name == 'main'}}
+        id: generate_token
+        uses: tibdex/github-app-token@v1
+        with:
+          app_id: ${{ vars.FUNDABOT_APP_ID }}
+          private_key: ${{ secrets.FUNDABOT_PRIVATE_KEY }}
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - uses: actions/checkout@v3
+        with:
+          token: ${{ github.ref_name == 'main' && steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}
+
+      - name: Version bump
+        id: version
+        uses: phips28/gh-action-bump-version@v9.1.0
+        with:
+          major-wording: ${{ env.BRANCH == 'main' && '[bump major]' || '[bump major --force]' }}
+          minor-wording: ${{ env.BRANCH == 'main' && '[bump minor]' || '[bump minor --force]' }}
+          patch-wording: ${{ null }}
+          rc-wording: ${{ null }}
+          default: "${{ env.BRANCH == 'main' && 'patch' || 'prerelease' }}"
+          PACKAGEJSON_DIR: "jwks-slim"
+          preid: "${{ env.BRANCH }}"
+          skip-tag: "true"
+          skip-push: "true"
+          skip-commit: "true"
+          bump-policy: "ignore"
+
+      - name: Commit changes
+        env:
+          VERSION: ${{ steps.version.outputs.newTag }}
+        run: |
+          git config user.email "fundabot@fundwave.com"
+          git config user.name "fundabot"
+          git commit -a -m "CI: bumps jwks-slim to $VERSION" -m "[skip ci]"
+
+      - name: Publish package to npm
+        if: ${{ github.ref_name == 'main'}}
+        run: |
+          echo //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN} > ~/.npmrc
+          echo registry=https://registry.npmjs.org/ >> ~/.npmrc
+          npm publish --tag $BRANCH_TAG --access public
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.NPMJS_TOKEN}}
+
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ env.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
+
+      - name: Release
+        if: ${{ github.ref_name == 'main'}}
+        env:
+          VERSION: ${{ steps.version.outputs.newTag }}
+        run: |
+          if [ "${BRANCH}" != "main" ]; then PRERELEASE="-p"; fi
+          echo "Releasing version ${VERSION} on branch ${BRANCH}"
+          gh release create ${VERSION} --target ${BRANCH} --generate-notes ${PRERELEASE}

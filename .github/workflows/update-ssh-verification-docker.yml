@@ -1,0 +1,51 @@
+
+name: Update SSH Verification Docker on file change
+
+on:
+  push:
+    paths:
+      - trusted-fingerprint/docker/app.py
+      - trusted-fingerprint/docker/Dockerfile
+      - .github/workflows/update-ssh-verification-docker.yml
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  update-trustedfingerprint:
+    runs-on: "ubuntu-22.04"
+    environment: "Prod"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: configure-aws-credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{secrets.AWS_SSM_SSH_ROLE_ARN}}
+          role-session-name: UpdateTrustedFingerprintDockerSession
+          aws-region: ${{secrets.TRUSTED_FINGERPRINT_SERVER_REGION}}
+
+      - name: setup ssh
+        run: |
+          HOMEDIR=$(eval echo ~)
+          mkdir -p "$HOMEDIR/.ssh"
+          cd "$HOMEDIR/.ssh/"
+          ssh-keygen -q -t ed25519 -N '' -f $HOMEDIR/.ssh/id_ed25519
+          echo "${{secrets.PROXY_SERVER_FINGERPRINT_ED25519}}" >> $HOMEDIR/.ssh/known_hosts
+          cat <<EOF | tee $HOMEDIR/.ssh/config
+          Host ${{secrets.TRUSTED_FINGERPRINT_INSTANCE_ID}}
+            ProxyCommand aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters 'portNumber=%p'
+          EOF
+
+      - name: Deploy to trusted fingerprint server
+        run: |
+          HOMEDIR=$(eval echo ~)
+          aws ec2-instance-connect send-ssh-public-key \
+             --instance-os-user "deployuser" \
+             --instance-id "${{secrets.TRUSTED_FINGERPRINT_INSTANCE_ID}}" \
+             --ssh-public-key "$(cat $HOMEDIR/.ssh/id_ed25519.pub)"
+          ssh -T deployuser@${{secrets.TRUSTED_FINGERPRINT_INSTANCE_ID}} "cd /opt/server && bash run.sh" && echo "Deployment success"

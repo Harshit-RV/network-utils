@@ -1,0 +1,32 @@
+{
+  "name": "jwks-slim",
+  "version": "1.0.0",
+  "description": "Library to retrieve RSA public keys from a JWKS endpoint",
+  "main": "src/index.js",
+  "scripts": {
+    "test:node": "jest --verbose --detectOpenHandles --env=node",
+    "test:worker": "jest --verbose --detectOpenHandles --env=@edge-runtime/jest-environment",
+    "test": "npm run test:node && npm run test:worker"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/getfundwave/network-utils.git"
+  },
+  "keywords": [
+    "jwks",
+    "jwt"
+  ],
+  "homepage": "https://github.com/getfundwave/network-utils/tree/main/jwks-slim#readme",
+  "author": "The Fundwave Authors",
+  "license": "ISC",
+  "dependencies": {
+    "debug": "^4.3.4",
+    "jwk-to-pem": "^2.0.5",
+    "lru-memoizer": "^2.2.0",
+    "setimmediate": "^1.0.5"
+  },
+  "devDependencies": {
+    "@edge-runtime/jest-environment": "^2.3.10",
+    "jest": "^29.7.0"
+  }
+}
