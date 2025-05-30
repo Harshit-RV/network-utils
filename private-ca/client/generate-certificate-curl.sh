@@ -4,7 +4,6 @@ CA_ACTION=${1}
 CA_LAMBDA_URL=${2}
 USER_SSH_DIR=${3:-"/home/$USER/.ssh"}
 SYSTEM_SSH_DIR=${4:-"/etc/ssh"}
-SYSTEM_SSL_DIR=${5:-"/etc/ssl"}
 AWS_STS_REGION=${6:-"ap-southeast-1"}
 AWS_PROFILE=${7:-"default"}
 
@@ -18,7 +17,6 @@ while getopts ":h" option; do
          echo "Possible actions:"
          echo " generateHostSSHCert: Generates SSH Certificate for Host"
          echo " generateClientSSHCert: Generates SSH Certificate for Client"
-         echo " generateClientX509Cert: Generates X.509 Certificate for Client"
          exit;;
       *)
          echo "Error: Invalid option"
@@ -64,33 +62,11 @@ elif [[ $CA_ACTION = "generateHostSSHCert" ]]; then
     fi
     test -f ${SYSTEM_SSH_DIR}/ssh_host_rsa_key.pub || sudo ssh-keygen -t rsa -b 4096 -f ${SYSTEM_SSH_DIR}/ssh_host_rsa_key -C host_ca -N ""
     CERT_PUBKEY=$(cat ${SYSTEM_SSH_DIR}/ssh_host_rsa_key.pub | base64 | tr -d \\n)
-
-elif [[ $CA_ACTION = "generateClientX509Cert" ]]; then
-    test -d ${SYSTEM_SSL_DIR}/privateCA || sudo mkdir -p ${SYSTEM_SSL_DIR}/privateCA
-    if test -f ${SYSTEM_SSL_DIR}/privateCA/public.crt; then
-        # X.509 Certificate already exists
-
-        if ( sudo openssl x509 -checkend 300 -noout -in ${SYSTEM_SSL_DIR}/privateCA/public.crt ); then
-            # Certificate is valid for atleast 300 seconds (5 minutes)
-            echo "A valid certificate was found at ${SYSTEM_SSL_DIR}/privateCA/public.crt."
-            echo "Aborting..."
-            exit;
-        else
-            # Certificate expired or about to expire
-            sudo rm ${SYSTEM_SSL_DIR}/privateCA/public.crt
-        fi
-    fi
-    if ! test -f ${SYSTEM_SSL_DIR}/privateCA/public.pem; then
-        sudo openssl genrsa -out ${SYSTEM_SSL_DIR}/privateCA/key.pem 2048
-        sudo openssl rsa -in ${SYSTEM_SSL_DIR}/privateCA/key.pem -outform PEM -pubout -out ${SYSTEM_SSL_DIR}/privateCA/public.pem
-    fi
-    CERT_PUBKEY=$(cat ${SYSTEM_SSL_DIR}/privateCA/public.pem | base64 | tr -d \\n)
 else
     echo "Invalid Action"
     echo "Possible actions include:"
     echo " generateHostSSHCert: Generates SSH Certificate for Host"
     echo " generateClientSSHCert: Generates SSH Certificate for Client"
-    echo " generateClientX509Cert: Generates X.509 Certificate for Client"
     exit;
 fi
 
@@ -143,11 +119,6 @@ elif [[ $CA_ACTION = "generateHostSSHCert" ]]; then
     if [[ $(grep -q "TrustedUserCAKeys" "${SYSTEM_SSH_DIR}/sshd_config"; echo $?) -ne 0 ]]; then
         echo "TrustedUserCAKeys ${SYSTEM_SSH_DIR}/user_ca.pub" >> ${SYSTEM_SSH_DIR}/sshd_config
     fi
-elif [[ $CA_ACTION = "generateClientX509Cert" ]]; then
-    ENCODED_CERTIFICATE=$(curl "${CA_LAMBDA_URL}" -H 'content-type: application/json' -d "$EVENT_JSON" | tr -d '"')
-    CERTIFICATE=$(echo $ENCODED_CERTIFICATE | base64 -d)
-    sudo sh -c "echo '$CERTIFICATE' > ${SYSTEM_SSL_DIR}/privateCA/public.crt"
-    echo "Certificate written to ${SYSTEM_SSL_DIR}/privateCA/public.crt"
 fi
 
 # Clean up
