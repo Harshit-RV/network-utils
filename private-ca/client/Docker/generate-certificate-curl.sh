@@ -4,7 +4,6 @@ CA_ACTION=${1:-$CA_ACTION}
 CA_LAMBDA_URL=${2:-$CA_LAMBDA_URL}
 USER_SSH_DIR=${3:-"/home/$USER/.ssh"}
 SYSTEM_SSH_DIR=${4:-"/etc/ssh"}
-SYSTEM_SSL_DIR=${5:-"/etc/ssl"}
 AWS_STS_REGION=${6:-"ap-southeast-1"}
 AWS_PROFILE=${7:-"default"}
 
@@ -18,7 +17,6 @@ while getopts ":h" option; do
          echo "Possible actions:"
          echo " generateHostSSHCert: Generates SSH Certificate for Host"
          echo " generateClientSSHCert: Generates SSH Certificate for Client"
-         echo " generateClientX509Cert: Generates X.509 Certificate for Client"
          exit;;
       *)
          echo "Error: Invalid option"
@@ -64,39 +62,19 @@ elif [[ $CA_ACTION = "generateHostSSHCert" ]]; then
     fi
     test -f ${SYSTEM_SSH_DIR}/ssh_host_rsa_key.pub || ssh-keygen -t rsa -b 4096 -f ${SYSTEM_SSH_DIR}/ssh_host_rsa_key -C host_ca -N ""
     CERT_PUBKEY=$(cat ${SYSTEM_SSH_DIR}/ssh_host_rsa_key.pub | base64 | tr -d \\n)
-
-elif [[ $CA_ACTION = "generateClientX509Cert" ]]; then
-    test -d ${SYSTEM_SSL_DIR}/privateCA || mkdir -p ${SYSTEM_SSL_DIR}/privateCA
-    if test -f ${SYSTEM_SSL_DIR}/privateCA/public.crt; then
-        # X.509 Certificate already exists
-
-        if ( openssl x509 -checkend 300 -noout -in ${SYSTEM_SSL_DIR}/privateCA/public.crt ); then
-            # Certificate is valid for atleast 300 seconds (5 minutes)
-            echo "A valid certificate was found at ${SYSTEM_SSL_DIR}/privateCA/public.crt."
-            echo "Aborting..."
-            exit;
-        else
-            # Certificate expired or about to expire
-            rm ${SYSTEM_SSL_DIR}/privateCA/public.crt
-        fi
-    fi
-    if ! test -f ${SYSTEM_SSL_DIR}/privateCA/public.pem; then
-        openssl genrsa -out ${SYSTEM_SSL_DIR}/privateCA/key.pem 2048
-        openssl rsa -in ${SYSTEM_SSL_DIR}/privateCA/key.pem -outform PEM -pubout -out ${SYSTEM_SSL_DIR}/privateCA/public.pem
-    fi
-    CERT_PUBKEY=$(cat ${SYSTEM_SSL_DIR}/privateCA/public.pem | base64 | tr -d \\n)
 else
     echo "Invalid Action"
     echo "Possible actions include:"
     echo " generateHostSSHCert: Generates SSH Certificate for Host"
     echo " generateClientSSHCert: Generates SSH Certificate for Client"
-    echo " generateClientX509Cert: Generates X.509 Certificate for Client"
     exit;
 fi
 
 # Temporary Credentials
-INSTANCE_ROLE_NAME=$(curl http://169.254.169.254/latest/meta-data/iam/security-credentials/)
-TEMP_CREDS=$(curl http://169.254.169.254/latest/meta-data/iam/security-credentials/$INSTANCE_ROLE_NAME)
+TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 120")
+INSTANCE_ROLE_NAME=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/iam/security-credentials/)
+TEMP_CREDS=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/iam/security-credentials/$INSTANCE_ROLE_NAME)
+PUBLIC_IP=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)
 
 ACCESS_KEY_ID=$(echo $TEMP_CREDS | jq -r ".AccessKeyId")
 SECRET_ACCESS_KEY=$(echo $TEMP_CREDS | jq -r ".SecretAccessKey")
@@ -107,7 +85,7 @@ output=$($PYTHON_EXEC aws-auth-header.py $ACCESS_KEY_ID $SECRET_ACCESS_KEY $SESS
 auth_header=$(echo $output | jq -r ".Authorization")
 date=$(echo $output | jq -r ".Date")
 
-EVENT_JSON=$(echo "{\"auth\":{\"amzDate\":\"${date}\",\"authorizationHeader\":\"${auth_header}\",\"sessionToken\":\"${SESSION_TOKEN}\"},\"certPubkey\":\"${CERT_PUBKEY}\",\"action\":\"${CA_ACTION}\",\"awsSTSRegion\":\"${AWS_STS_REGION}\"}")
+EVENT_JSON=$(echo "{\"auth\":{\"amzDate\":\"${date}\",\"authorizationHeader\":\"${auth_header}\",\"sessionToken\":\"${SESSION_TOKEN}\"},\"certPubkey\":\"${CERT_PUBKEY}\",\"action\":\"${CA_ACTION}\",\"awsSTSRegion\":\"${AWS_STS_REGION}\",\"publicIp\":\"${PUBLIC_IP}\"}")
 
 if [[ $CA_ACTION = "generateClientSSHCert" ]]; then
     LAMBDA_RESPONSE=$(curl "${CA_LAMBDA_URL}" -H 'content-type: application/json' -d "$EVENT_JSON")
@@ -140,9 +118,4 @@ elif [[ $CA_ACTION = "generateHostSSHCert" ]]; then
     if [[ $(grep -q "TrustedUserCAKeys" "${SYSTEM_SSH_DIR}/sshd_config"; echo $?) -ne 0 ]]; then
         echo "TrustedUserCAKeys ${SYSTEM_SSH_DIR}/user_ca.pub" >> ${SYSTEM_SSH_DIR}/sshd_config
     fi
-elif [[ $CA_ACTION = "generateClientX509Cert" ]]; then
-    ENCODED_CERTIFICATE=$(curl "${CA_LAMBDA_URL}" -H 'content-type: application/json' -d "$EVENT_JSON" | tr -d '"')
-    CERTIFICATE=$(echo $ENCODED_CERTIFICATE | base64 -d)
-    sh -c "echo '$CERTIFICATE' > ${SYSTEM_SSL_DIR}/privateCA/public.crt"
-    echo "Certificate written to ${SYSTEM_SSL_DIR}/privateCA/public.crt"
 fi

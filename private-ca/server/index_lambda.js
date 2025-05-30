@@ -18,7 +18,7 @@ export const handler = async (event) => {
   // action
   switch(event.action) {
     case "generateHostSSHCert":
-      const hostSSHCert = await signHostSSHCertificate(callerIdentity, secret, event.certPubkey);
+      const hostSSHCert = await signHostSSHCertificate(callerIdentity, secret, event.certPubkey, event.publicIp);
       return {
         statusCode: 200,
         body: "{\"certificate\" : \""+Buffer.from(hostSSHCert).toString('base64')+"\", \"user_ca.pub\": \""+secret["user_ca.pub"]+"\"}"
@@ -29,8 +29,6 @@ export const handler = async (event) => {
         statusCode: 200,
         body: "{\"certificate\" : \""+Buffer.from(clientSSHCert).toString('base64')+"\", \"host_ca.pub\": \""+secret["host_ca.pub"]+"\"}"
       };
-    case "generateClientX509Cert":
-      return await generateClientX509Cert(callerIdentity, secret, event);
     default:
       console.log("Invalid Action")
       return {
