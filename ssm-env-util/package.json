@@ -1,6 +1,6 @@
 {
   "name": "ssm-env-util",
-  "version": "1.0.0",
+  "version": "1.0.1-update/privateCA.0",
   "description": "get parameters from ssm by parsing .env.template",
   "type": "module",
   "main": "index.js",
