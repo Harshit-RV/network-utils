@@ -4,8 +4,8 @@ CA_ACTION=${1}
 CA_LAMBDA_URL=${2}
 USER_SSH_DIR=${3:-"/home/$USER/.ssh"}
 SYSTEM_SSH_DIR=${4:-"/etc/ssh"}
-AWS_STS_REGION=${6:-"ap-southeast-1"}
-AWS_PROFILE=${7:-"default"}
+AWS_STS_REGION=${5:-"ap-southeast-1"}
+AWS_PROFILE=${6:-"default"}
 
 PYTHON_EXEC=$(which python || which python3)
 
