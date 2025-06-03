@@ -7,16 +7,6 @@ LAMBDA_REGION=${5:-'us-west-2'}
 CA_LAMBDA_FUNCTION_NAME=${6:-"privateCA"}
 AWS_STS_REGION=${7:-"ap-southeast-1"}
 
-# Edit values here
-######################################################
-# # Get host SSH certificate
-# SSH_ATTRS_VALIDITY=""
-# SSH_HOST_RSA_PUBKEY=""
-
-# # Get client SSH certificate
-# SSH_ATTRS_VALIDITY=""
-# SSH_CLIENT_RSA_PUBKEY=""
-######################################################
 
 # Check for options
 while getopts ":h" option; do
