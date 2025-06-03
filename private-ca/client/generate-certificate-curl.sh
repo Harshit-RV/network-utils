@@ -77,10 +77,14 @@ ACCESS_KEY_ID=$(echo $TEMP_CREDS | jq -r ".Credentials.AccessKeyId")
 SECRET_ACCESS_KEY=$(echo $TEMP_CREDS | jq -r ".Credentials.SecretAccessKey")
 SESSION_TOKEN=$(echo $TEMP_CREDS | jq -r ".Credentials.SessionToken")
 
-# Auth Headers
 $PYTHON_EXEC -m venv env && source env/bin/activate
 pip install boto3
 
+# Update PYTHON_EXEC to use the Python executable from the activated virtual environment
+# This ensures we use the venv's Python with the installed dependencies (boto3)
+PYTHON_EXEC=$(which python || which python3)
+
+# Auth Headers
 output=$($PYTHON_EXEC aws-auth-header.py $ACCESS_KEY_ID $SECRET_ACCESS_KEY $SESSION_TOKEN $AWS_STS_REGION)
 auth_header=$(echo $output | jq -r ".Authorization")
 date=$(echo $output | jq -r ".Date")
