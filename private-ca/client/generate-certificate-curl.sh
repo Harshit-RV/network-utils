@@ -1,15 +1,20 @@
 #!/bin/bash
 
 CA_ACTION=${1:-$CA_ACTION}
-CA_LAMBDA_URL=${2:-$CA_LAMBDA_URL}
-USER_SSH_DIR=${3:-"/home/$USER/.ssh"}
-SYSTEM_SSH_DIR=${4:-"/etc/ssh"}
-AWS_STS_REGION=${5:-"ap-southeast-1"}
-AWS_PROFILE=${6:-"default"}
-ENVIRONMENT=${7:-"client"}
+CA_URL=${2:-$CA_URL}
+AWS_PROFILE=${3:-"default"}
+ENVIRONMENT=${4:-"client"}
+USER_SSH_DIR=${5:-"/home/$USER/.ssh"}
+USER_AWS_DIR=${6:-"/home/$USER/.aws"}
+SYSTEM_SSH_DIR=${7:-"/etc/ssh"}
+AWS_STS_REGION=${8:-"ap-southeast-1"}
 
 PYTHON_EXEC=$(which python 2>/dev/null || which python3 2>/dev/null)
 [[ $? -ne 0 ]] && { echo "Python not installed."; exit 1; }
+
+is_mfa_enabled() {
+  grep -q 'get-credentials' ${USER_AWS_DIR}/credentials
+}
 
 get_aws_credentials() {
     local method=${1:-"host"}
@@ -31,10 +36,24 @@ get_aws_credentials() {
         SESSION_TOKEN=$(echo $TEMP_CREDS | jq -r ".Token")
 
     elif [[ $method == "client" ]]; then
-        TEMP_CREDS=$(aws sts get-session-token --profile $AWS_PROFILE)
-        ACCESS_KEY_ID=$(echo $TEMP_CREDS | jq -r ".Credentials.AccessKeyId")
-        SECRET_ACCESS_KEY=$(echo $TEMP_CREDS | jq -r ".Credentials.SecretAccessKey")
-        SESSION_TOKEN=$(echo $TEMP_CREDS | jq -r ".Credentials.SessionToken")
+        if is_mfa_enabled; then
+            CALLER_IDENTITY=$(aws sts get-caller-identity --profile $AWS_PROFILE)
+            [[ $? -ne 0 ]] && { echo "Your AWS credentials have either expired or are invalid. Please check your credentials and try again."; exit 1; }
+            
+            TEMP_CREDS=$(get-credentials $AWS_PROFILE)
+            ACCESS_KEY_ID=$(echo $TEMP_CREDS | jq -r ".AccessKeyId")
+            SECRET_ACCESS_KEY=$(echo $TEMP_CREDS | jq -r ".SecretAccessKey")
+            SESSION_TOKEN=$(echo $TEMP_CREDS | jq -r ".SessionToken")
+
+        else
+            TEMP_CREDS=$(aws sts get-session-token --profile $AWS_PROFILE)
+            ACCESS_KEY_ID=$(echo $TEMP_CREDS | jq -r ".Credentials.AccessKeyId")  
+            SECRET_ACCESS_KEY=$(echo $TEMP_CREDS | jq -r ".Credentials.SecretAccessKey")
+            SESSION_TOKEN=$(echo $TEMP_CREDS | jq -r ".Credentials.SessionToken")
+        fi
+    else 
+        echo "Invalid environment"
+        exit 1
     fi
 }
 
@@ -123,7 +142,7 @@ EVENT_JSON=$(echo "{\"auth\":{\"amzDate\":\"${date}\",\"authorizationHeader\":\"
 
 
 if [[ $CA_ACTION = "generateClientSSHCert" ]]; then
-    LAMBDA_RESPONSE=$(curl "${CA_LAMBDA_URL}" -H 'content-type: application/json' -d "$EVENT_JSON")
+    LAMBDA_RESPONSE=$(curl "${CA_URL}" -H 'content-type: application/json' -d "$EVENT_JSON")
     ENCODED_CERTIFICATE=$(echo $LAMBDA_RESPONSE | jq -r ".certificate")
     CERTIFICATE=$(echo $ENCODED_CERTIFICATE | base64 -d)
     HOST_CA_PUBKEY=$(echo $LAMBDA_RESPONSE | jq -r ".\"host_ca.pub\"" | base64 -d)
@@ -139,7 +158,7 @@ if [[ $CA_ACTION = "generateClientSSHCert" ]]; then
 
 # sudo access is required to generate host certificate
 elif [[ $CA_ACTION = "generateHostSSHCert" ]]; then
-    LAMBDA_RESPONSE=$(curl "${CA_LAMBDA_URL}" -H 'content-type: application/json' -d "$EVENT_JSON")
+    LAMBDA_RESPONSE=$(curl "${CA_URL}" -H 'content-type: application/json' -d "$EVENT_JSON")
     ENCODED_CERTIFICATE=$(echo $LAMBDA_RESPONSE | jq -r ".certificate")
     CERTIFICATE=$(echo $ENCODED_CERTIFICATE | base64 -d)    
     USER_CA_PUBKEY=$(echo $LAMBDA_RESPONSE | jq -r ".\"user_ca.pub\"" | base64 -d)
