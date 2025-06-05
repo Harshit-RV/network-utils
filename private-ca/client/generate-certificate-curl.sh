@@ -2,8 +2,8 @@
 
 CA_ACTION=${1:-$CA_ACTION}
 CA_URL=${2:-$CA_URL}
-AWS_PROFILE=${3:-"default"}
-ENVIRONMENT=${4:-"client"}
+ENVIRONMENT=${3:-"client"}
+AWS_PROFILE=${4:-"default"}
 USER_SSH_DIR=${5:-"/home/$USER/.ssh"}
 USER_AWS_DIR=${6:-"/home/$USER/.aws"}
 SYSTEM_SSH_DIR=${7:-"/etc/ssh"}

@@ -1,61 +1,121 @@
-# Certificate Generator Docker Container
+# PrivateCA
 
-This Docker container runs a script that generates SSH certificates using a Private Certificate Authority (CA) hosted on AWS Lambda. The script provides options to generate SSH certificates for hosts and clients.
+This project provides tools to generate SSH certificates using a Private Certificate Authority (CA). It supports generating SSH certificates for both hosts and clients.
 
 ## Prerequisites
 
-- Docker: Install Docker on your system. Refer to the [Docker documentation](https://docs.docker.com/get-docker/) for installation instructions.
+### Running via Docker
+
+- Docker
+
+### Running directly
+
+- Python 3
+- Bash
+- Dependencies: `curl`, `jq`, `ssh-keygen`, `base64`
 
 ## Usage
 
-1. Clone this repository or download the Dockerfile and the `generate-certificate.sh` script.
+### Running directly
 
-2. Build the Docker image using the following command:
+#### For client certificates:
 
-   ```shell
-   docker build -t generate-certificate .
+```bash
+bash generate-certificate-curl.sh generateClientSSHCert <PRIVATE-CA-URL> client
+```
+
+#### For host certificates:
+
+```bash
+bash generate-certificate-curl.sh generateHostSSHCert <PRIVATE-CA-URL> host
+```
+
+**Note:**
+
+1. Sudo privilege is required for generating host certificates as they need to write to system directories like `/etc/ssh`.
+2. The `ENVIRONMENT` (host or client) parameter only affects how AWS credentials are retrieved, not what type of certificates you can generate. See [Script Parameters](#script-parameters) for more details.
+
+### Running via Docker
+
+1. Build the Docker image:
+
+   ```bash
+   docker build -t certificate-generator .
    ```
 
-3. Run the Docker container with the desired parameters. The container requires specific environment variables to be set:
+2. Run the Docker container with the required volume mounts and parameters:
 
-   - `CA_ACTION`: Specify the action to perform. Possible values are:
-
-     - `generateHostSSHCert`: Generates an SSH certificate for the host.
-     - `generateClientSSHCert`: Generates an SSH certificate for a client.
-
-   - `CA_LAMBDA_URL`: The URL of the AWS Lambda function hosting the Private CA.
-
-   Optional environment variables:
-
-   - `USER_SSH_DIR`: The path to the directory where the user's SSH keys will be stored. Defaults to "/home/$USER/.ssh".
-   - `SYSTEM_SSH_DIR`: The path to the system's SSH directory. Defaults to "/etc/ssh".
-   - `AWS_STS_REGION`: The AWS region for the STS (Security Token Service). Defaults to "ap-south-1".
-   - `AWS_PROFILE`: The AWS profile for running aws commands. Defaults to "default"
-
-   ```shell
-   docker run -it --rm \
-       -v /path/to/ssh/directory:/home/$USER/.ssh \
-       -v /path/to/system/ssh/directory:/etc/ssh \
-       -e CA_ACTION=<action> \
-       -e CA_LAMBDA_URL=<lambda_url> \
-       -e USER_SSH_DIR=<user_ssh_directory> \
-       -e SYSTEM_SSH_DIR=<system_ssh_directory> \
-       -e AWS_STS_REGION=<sts_region> \
-       -e AWS_PROFILE=<aws_profile> \
-       generate-certificate
+   ```bash
+   docker run --rm \
+      -v /home/harshit/.ssh:/root/.ssh \
+      -v /etc/ssh:/etc/ssh \
+      -v /etc/ssl/privateCA:/etc/ssl/privateCA \
+      certificate-generator \
+      generateHostSSHCert \
+      https://<PRIVATE-CA-URL>/ \
+      host \
+      default \
+      /root/.ssh
    ```
 
-4. The script will generate the necessary certificates based on the provided action and store them in the specified directories.
+## Running as a cron job (optional)
 
-## Script Explanation
+Since certificates need to be renewed periodically, you can set up a cron job to automatically regenerate them.
 
-The `generate-certificate.sh` script performs the following tasks:
+Sample script:
 
-- Parses command-line arguments and checks for the specified CA action.
-- Checks if the required SSH or X.509 certificate already exists and is valid. If not, generates new certificates.
-- Retrieves temporary AWS credentials using STS (Security Token Service).
-- Generates authentication headers required for making authenticated AWS API requests.
-- Invokes the AWS Lambda function to generate the certificate based on the specified action.
-- Stores the generated certificate in the appropriate directory.
+```bash
+#!/bin/bash
 
-Make sure to adjust the script parameters and environment variables according to your specific requirements.
+# Create the cron job entry
+echo "* */1 * * * cd bash generate-certificate-curl.sh generateHostSSHCert https://<PRIVATE-CA-URL>/ host >> /home/cron.log 2>&1" > /tmp/root_crontab
+
+# Load into root's crontab
+crontab -u root /tmp/root_crontab
+
+# Optionally start cron service (only if not already running)
+systemctl start cron 2>/dev/null || systemctl start crond 2>/dev/null
+```
+
+## Script Parameters
+
+The `generate-certificate-curl.sh` script accepts the following parameters:
+
+1. **CA_ACTION** (required): The action to perform
+
+   - `generateClientSSHCert`: Generates an SSH certificate for clients
+   - `generateHostSSHCert`: Generates an SSH certificate for hosts
+
+2. **CA_URL** (required): URL of the Private CA
+
+3. **ENVIRONMENT** (optional): Machine environment type - "client" or "host" (defaults to "client")
+
+   - **"host"**: For EC2 instances - uses EC2 instance metadata for AWS credentials
+   - **"client"**: For local user machines - uses AWS CLI/STS for credentials
+   - _Note: This parameter only affects how AWS credentials are retrieved, not what type of certificates you can generate_
+
+4. **AWS_PROFILE** (optional): AWS profile name (defaults to "default")
+
+5. **USER_SSH_DIR** (optional): Path to user's SSH directory (defaults to "/home/$USER/.ssh")
+
+6. **USER_AWS_DIR** (optional): Path to user's AWS directory (defaults to "/home/$USER/.aws")
+
+7. **SYSTEM_SSH_DIR** (optional): Path to system SSH directory (defaults to "/etc/ssh")
+
+8. **AWS_STS_REGION** (optional): AWS region for STS (defaults to "ap-southeast-1")
+
+## Important Notes
+
+- **Environment vs Certificate Type**: The `ENVIRONMENT` parameter determines how AWS credentials are retrieved, not what certificates you can generate
+  - You can generate both client and host certificates from either environment type
+  - EC2 instances should use `ENVIRONMENT=host` for credential retrieval via instance metadata
+  - Local user machines should use `ENVIRONMENT=client` for credential retrieval via AWS CLI
+- **Certificate Type**: Determined by the `CA_ACTION` parameter (`generateClientSSHCert` or `generateHostSSHCert`)
+- **Permissions**: Host certificates require sudo privileges for system directory access
+
+## Directory Structure
+
+- `generate-certificate-curl.sh`: Main script for certificate generation using curl
+- `generate-certificate-aws-cli.sh`: Alternative script using AWS CLI
+- `aws-auth-header.py`: Python helper for generating AWS authentication headers
+- `Dockerfile`: Docker container configuration
