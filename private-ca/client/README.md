@@ -47,7 +47,7 @@ bash generate-certificate-curl.sh generateHostSSHCert <PRIVATE-CA-URL> host
 
    ```bash
    docker run --rm \
-      -v /home/harshit/.ssh:/root/.ssh \
+      -v /home/$USER/.ssh:/root/.ssh \
       -v /etc/ssh:/etc/ssh \
       -v /etc/ssl/privateCA:/etc/ssl/privateCA \
       certificate-generator \
