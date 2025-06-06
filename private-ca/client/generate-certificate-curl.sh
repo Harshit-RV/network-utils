@@ -61,7 +61,7 @@ get_aws_credentials() {
 while getopts ":h" option; do
    case $option in
       h)
-         echo "Usage: ./generate-certificate.sh [ACTION] [PUBLIC KEY FILE] [LAMBDA URL]"
+         echo "Usage: ./generate-certificate.sh [ACTION] [CA URL] [ENVIRONMENT] [AWS PROFILE] [USER SSH DIR] [USER AWS DIR] [SYSTEM SSH DIR] [AWS STS REGION]"
          echo "Possible actions:"
          echo " generateHostSSHCert: Generates SSH Certificate for Host"
          echo " generateClientSSHCert: Generates SSH Certificate for Client"
@@ -96,6 +96,12 @@ if [[ $CA_ACTION = "generateClientSSHCert" ]]; then
     CERT_PUBKEY=$(cat ${USER_SSH_DIR}/id_rsa.pub | base64 | tr -d \\n)
 
 elif [[ $CA_ACTION = "generateHostSSHCert" ]]; then
+    # Host certificate generation is not allowed in client environment
+    if [[ $ENVIRONMENT = "client" ]]; then
+        echo -e "\nError: generateHostSSHCert is not allowed in client environment.\nHost certificate generation requires host/server environment.\n"
+        exit 1
+    fi
+    
     if test -f ${SYSTEM_SSH_DIR}/ssh_host_rsa_key-cert.pub; then
         # Host SSH Certificate already exists
         current_timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S") 
