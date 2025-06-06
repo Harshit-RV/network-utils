@@ -1,7 +1,6 @@
 import { signHostSSHCertificate } from './generate-host-ssh-cert.js';
 import { signClientSSHCertificate } from './generate-client-ssh-cert.js';
 import { getCallerIdentity } from './get-caller-identity.js';
-import { generateClientX509Cert } from './generate-client-x509-cert.js';
 import { getSecret } from './secret-manager-utils.js';
 const AWS_SCRTS_REGION = process.env.AWS_SCRTS_REGION;
 
