@@ -39,7 +39,7 @@ bash generate-certificate-curl.sh generateHostSSHCert <PRIVATE-CA-URL> host
 **Note:**
 
 1. Sudo privilege is required for generating host certificates as they need to write to system directories like `/etc/ssh`.
-2. The `ENVIRONMENT` (host or client) parameter only affects how AWS credentials are retrieved, not what type of certificates you can generate. See [Script Parameters](#script-parameters) for more details.
+2. The `ENVIRONMENT` (host or client) parameter affects how AWS credentials are retrieved. See [Script Parameters](#script-parameters) for more details.
 
 ### Running via AWS CLI (Lambda)
 
@@ -108,7 +108,6 @@ The `generate-certificate-curl.sh` script accepts the following parameters:
 
    - **"host"**: For EC2 instances - uses EC2 instance metadata for AWS credentials
    - **"client"**: For local user machines - uses AWS CLI/STS for credentials
-   - _Note: This parameter only affects how AWS credentials are retrieved, not what type of certificates you can generate_
 
 4. **AWS_PROFILE** (optional): AWS profile name (defaults to "default")
 
@@ -131,7 +130,6 @@ The `generate-certificate-aws-cli.sh` script accepts the following parameters:
 
    - **"host"**: For EC2 instances - uses EC2 instance metadata for AWS credentials
    - **"client"**: For local user machines - uses AWS CLI/STS for credentials
-   - _Note: This parameter only affects how AWS credentials are retrieved, not what type of certificates you can generate_
 
 3. **AWS_PROFILE** (optional): AWS profile name (defaults to "default")
 
@@ -147,12 +145,15 @@ The `generate-certificate-aws-cli.sh` script accepts the following parameters:
 
 ## Important Notes
 
-- **Environment vs Certificate Type**: The `ENVIRONMENT` parameter determines how AWS credentials are retrieved, not what certificates you can generate
-  - You can generate both client and host certificates from either environment type
-  - EC2 instances should use `ENVIRONMENT=host` for credential retrieval via instance metadata
-  - Local user machines should use `ENVIRONMENT=client` for credential retrieval via AWS CLI
 - **Certificate Type**: Determined by the `CA_ACTION` parameter (`generateClientSSHCert` or `generateHostSSHCert`)
 - **Permissions**: Host certificates require sudo privileges for system directory access
+
+## Client Environment Limitations
+
+**Important**: Client environments can only generate client certificates because they don't have a public IP address.
+
+- **Host Certificate Requirements**: Host certificates require the public IP address as a hostname when issuing the certificate. Due to the absence of a public IP address, client environments cannot generate host certificates
+- **Recommendation**: Use client environments exclusively for generating client certificates, and use host environments (such as EC2 instances with public IPs) for generating host certificates
 
 ## Directory Structure
 
