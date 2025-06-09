@@ -35,6 +35,47 @@ bash generate-certificate-curl.sh generateHostSSHCert <PRIVATE-CA-URL> host
 1. Sudo privilege is required for generating host certificates as they need to write to system directories like `/etc/ssh`.
 2. The `ENVIRONMENT` (host or client) parameter only affects how AWS credentials are retrieved, not what type of certificates you can generate. See [Script Parameters](#script-parameters) for more details.
 
+### Running via AWS CLI (Lambda)
+
+The `generate-certificate-aws-cli.sh` script provides an alternative approach to generate certificates. This method uses AWS CLI to invoke a Lambda function rather than making direct HTTP requests.
+
+#### Usage:
+
+```bash
+bash generate-certificate-aws-cli.sh <CA_ACTION> <ENVIRONMENT> <AWS-PROFILE> <USER-SSH-DIR> <SYSTEM-SSH-DIR> <LAMBDA-REGION> <CA-LAMBDA-FUNCTION-NAME> <AWS-STS-REGION>
+```
+
+#### AWS CLI Script Parameters:
+
+1. **CA_ACTION** (required): The action to perform
+
+   - `generateClientSSHCert`: Generates an SSH certificate for clients
+   - `generateHostSSHCert`: Generates an SSH certificate for hosts
+
+2. **ENVIRONMENT** (optional): Machine environment type - "client" or "host" (defaults to "client")
+
+   - **"host"**: For EC2 instances - uses EC2 instance metadata for AWS credentials
+   - **"client"**: For local user machines - uses AWS CLI/STS for credentials
+   - _Note: This parameter only affects how AWS credentials are retrieved, not what type of certificates you can generate_
+
+3. **AWS_PROFILE** (optional): AWS profile name (defaults to "default")
+
+4. **USER_SSH_DIR** (optional): Path to user's SSH directory (defaults to "/home/$USER/.ssh")
+
+5. **SYSTEM_SSH_DIR** (optional): Path to system SSH directory (defaults to "/etc/ssh")
+
+6. **LAMBDA_REGION** (optional): AWS region where the Lambda function is deployed (defaults to "us-west-2")
+
+7. **CA_LAMBDA_FUNCTION_NAME** (optional): Name of the Lambda function (defaults to "privateCA")
+
+8. **AWS_STS_REGION** (optional): AWS region for STS operations (defaults to "ap-southeast-1")
+
+**Requirements for AWS CLI method:**
+
+- AWS CLI configured with appropriate credentials
+- Python 3
+- Access to the Lambda function in the specified region
+
 ### Running via Docker
 
 1. Build the Docker image:
